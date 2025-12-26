@@ -1,0 +1,458 @@
+---
+title: "Bella Beat Case Analyze"
+author: "Hao"
+date: "2025-12-26"
+output:
+  html_document
+---
+
+# 1. ASK PHASE
+# ------------------------------------------------------------------------------
+
+### 1.1 Background
+# Bellabeat, founded by Urška Sršen and Sando Mur, empowers women with 
+# data-driven insights into their own health and habits. While Bellabeat is 
+# successful, there is a significant opportunity to scale by analyzing how 
+# consumers use non-Bellabeat smart devices (FitBit) and applying those 
+# insights to Bellabeat's product line.
+
+### 1.2 Business Task
+# Analyze FitBit consumer data to identify usage trends and patterns. 
+# Use these insights to recommend improvements for Bellabeat's marketing 
+# strategy and apply them to one specific Bellabeat product.
+
+### 1.3 Key Stakeholders
+# - Urška Sršen: Cofounder and Chief Creative Officer
+# - Sando Mur: Cofounder and Executive Team Member
+# - Bellabeat Marketing Analytics Team
+
+### 1.4 Guiding Questions
+# 1. What are some trends in smart device usage?
+# 2. How could these trends apply to Bellabeat customers?
+# 3. How could these trends help influence Bellabeat marketing strategy?
+
+
+# ------------------------------------------------------------------------------
+# 2. PREPARE PHASE (Data Source & Integrity)
+# ------------------------------------------------------------------------------
+
+### 2.1 Data Source Information
+# - Source: FitBit Fitness Tracker Data (via Kaggle/Fitabase).
+# - URL: https://www.kaggle.com/datasets/arashnic/fitbit
+# - Description: Contains personal fitness tracker data from 30+ Fitbit users. 
+#   Includes minute-level output for activity, heart rate, and sleep.
+# - Timeframe: April 12, 2016 — May 12, 2016.
+
+### 2.2 Data Assessment (Addressing Guiding Questions)
+
+# Q: Where is your data stored?
+# A: The data is stored locally in the project directory after being 
+#    downloaded from the Kaggle Public Domain dataset.
+
+# Q: How is the data organized? Is it in long or wide format?
+# A: The data is organized into 18 CSV files. Most files are in 'Long' format 
+#    (e.g., each row represents a single point in time or a single day for a 
+#    specific user ID).
+
+# Q: Are there issues with bias or credibility in this data? (ROCCC Analysis)
+# - Reliable: LOW. The sample size is only 30-33 users, which is small for 
+#   generalizing to the entire population.
+# - Original: MEDIUM. The data was collected via Amazon Mechanical Turk.
+# - Comprehensive: LOW/MEDIUM. It lacks demographic information (age, gender, 
+#   location), which is crucial for Bellabeat's female-focused strategy.
+# - Current: LOW. The data is from 2016; smart device habits have evolved significantly.
+# - Cited: HIGH. It is a well-known public dataset used for data science case studies.
+
+# Q: How are you addressing licensing, privacy, security, and accessibility?
+# A: The dataset is CC0 (Public Domain). It is anonymized; user IDs are numeric 
+#    with no PII (Personally Identifiable Information).
+
+# Q: How did you verify the data’s integrity?
+# A: Integrity will be verified during the 'Process' phase by checking for 
+#    duplicates, verifying unique User IDs, and ensuring date-time consistency.
+
+# Q: How does it help you answer your question?
+# A: It provides a proxy for how people use wearables—tracking activity intensity, 
+#    sleep patterns, and calorie expenditure—which aligns with Bellabeat's products.
+
+# Q: Are there any problems with the data?
+# A: 1. Small sample size. 
+#    2. Potential 'Selection Bias' (users voluntarily submitted data).
+#    3. Gender is unknown; Bellabeat specifically targets women, but i 
+#       cannot confirm the gender of these FitBit users.
+
+
+# ------------------------------------------------------------------------------
+# 2. PREPARE PHASE (Environment Setup)
+# ------------------------------------------------------------------------------
+
+# Loading necessary packages for data cleaning, transformation, and visualization
+# tidyverse: for data manipulation
+# lubridate: for handling date/time formats
+# ggplot2: for data visualization
+# janitor: for cleaning column names
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(skimr)
+
+print("Environment setup complete. Introduction and Background documentation established.")
+```
+
+
+# ------------------------------------------------------------------------------
+# 3. PROCESS PHASE (Data Loading & Initial Inspection)
+# ------------------------------------------------------------------------------
+
+### 3.1 Importing Datasets
+# Note: focus on the primary files that address the business task.
+
+# Update the file paths according to my local folder structure
+```{r load_data}
+daily_activity <- read_csv("data/dailyActivity_merged.csv")
+daily_sleep <- read_csv("data/sleepDay_merged.csv")
+hourly_steps <- read_csv("data/hourlySteps_merged.csv")
+hourly_calories <- read_csv("data/hourlyCalories_merged.csv")
+```
+
+### 3.2 Initial Inspection
+# Inspecting the data structure and identifying data types
+```{r inspect}
+cat("--- Daily Activity Structure ---\n")
+str(daily_activity)
+
+cat("\n--- Sleep Data Structure ---\n")
+str(daily_sleep)
+```
+
+# Checking number of unique participants
+```{r check No.}
+n_distinct(daily_activity$Id) # Expecting 33
+n_distinct(daily_sleep$Id)    # Expecting 24 (Note the discrepancy)
+```
+
+
+# ------------------------------------------------------------------------------
+# 4. PROCESS PHASE (Data Cleaning & Transformation)
+# ------------------------------------------------------------------------------
+
+### 4.1 Cleaning Column Names
+# use clean_names() to ensure all column names are consistent: 
+# lowercase and using underscores (snake_case). This prevents syntax errors later.
+```{r clean col_name}
+daily_activity <- daily_activity %>% 
+  clean_names()
+
+daily_sleep <- daily_sleep %>% 
+  clean_names()
+
+hourly_steps <- hourly_steps %>% 
+  clean_names()
+
+hourly_calories <- hourly_calories %>% 
+  clean_names()
+```
+
+### 4.2 Handling Date and Time Formats
+# In the inspection, we saw dates were stored as 'character' strings. 
+# We must convert them to proper Date/DateTime objects for time-series analysis.
+
+# For Daily Activity (Format: 4/12/2016)
+```{r time_format}
+daily_activity <- daily_activity %>%
+  mutate(activity_date = mdy(activity_date))
+
+daily_sleep <- daily_sleep %>%
+  mutate(sleep_day = mdy_hms(sleep_day))
+
+hourly_steps <- hourly_steps %>%
+  mutate(activity_hour = mdy_hms(activity_hour))
+
+hourly_calories <- hourly_calories %>%
+  mutate(activity_hour = mdy_hms(activity_hour))
+```
+
+### 4.3 Deduplication (Handling Duplicate Rows)
+# Identifying and removing any exact duplicate rows to prevent skewed results.
+
+# Count duplicates before removal
+```{r count_duplicate}
+duplicates_activity <- sum(duplicated(daily_activity))
+duplicates_sleep <- sum(duplicated(daily_sleep))
+
+cat("Duplicates found in Activity:", duplicates_activity, "\n")
+cat("Duplicates found in Sleep:", duplicates_sleep, "\n")
+```
+
+# Remove duplicates
+```{r remove_duplicate}
+daily_activity <- daily_activity %>% distinct()
+daily_sleep <- daily_sleep %>% distinct()
+```
+
+### 4.4 Data Transformation (Feature Engineering)
+# Creating a 'weekday' column to analyze trends by day of the week.
+```{r creat_weekday}
+daily_activity <- daily_activity %>%
+  mutate(day_of_week = wday(activity_date, label = TRUE, abbr = FALSE))
+```
+
+
+# ------------------------------------------------------------------------------
+# 5. DATA VERIFICATION (Final Check)
+# ------------------------------------------------------------------------------
+
+# Verify that the dates are now in 'Date' or 'POSIXct' format
+# ------------------------------------------------------------------------------
+# 5. DATA VERIFICATION (Final Check)
+# ------------------------------------------------------------------------------
+
+# Verify that the dates are now in 'Date' or 'POSIXct' format
+```{r date_format}
+str(daily_activity$activity_date)
+str(daily_sleep$sleep_day)
+
+n_distinct(daily_activity$id)
+n_distinct(daily_sleep$id)
+
+print("Process Phase complete. Data is clean, formatted, and ready for analysis.")
+
+str(daily_activity$activity_date)
+str(daily_sleep$sleep_day)
+
+n_distinct(daily_activity$id)
+n_distinct(daily_sleep$id)
+
+print("Process Phase complete. Data is clean, formatted, and ready for analysis.")
+```
+
+
+# ------------------------------------------------------------------------------
+# 6. ANALYZE PHASE (Data Aggregation & Statistical Summary)
+# ------------------------------------------------------------------------------
+
+### 6.1 General Summary Statistics
+# Getting a high-level overview of activity and sleep to identify averages.
+
+# For Daily Activity: Focus on Steps, Sedentary Minutes, and Calories
+```{r DA}
+daily_activity %>%
+  select(total_steps, sedentary_minutes, calories) %>%
+  summary()
+```
+
+# For Daily Sleep: Focus on Minutes Asleep and Time in Bed
+```{r DS}
+daily_sleep %>%
+  select(total_minutes_asleep, total_time_in_bed) %>%
+  summary()
+```
+
+### 6.2 User Classification by Activity Level
+# According to health research (e.g., Medicine & Science in Sports & Exercise),
+# less than 5,000 steps is 'Sedentary', 5,000-9,999 is 'Active', 
+# and 10,000+ is 'Highly Active'.
+
+```{r classification}
+user_type_summary <- daily_activity %>%
+  group_by(id) %>%
+  summarize(avg_steps = mean(total_steps)) %>%
+  mutate(user_type = case_when(
+    avg_steps < 5000 ~ "Sedentary",
+    avg_steps >= 5000 & avg_steps < 10000 ~ "Active",
+    avg_steps >= 10000 ~ "Highly Active"
+  ))
+```
+
+# Calculate percentage of each user type
+```{r type%}
+user_type_percent <- user_type_summary %>%
+  group_by(user_type) %>%
+  summarise(total_count = n()) %>%
+  mutate(total_participants = sum(total_count)) %>%
+  mutate(percentage = round(total_count / total_participants * 100, 1))
+
+print(user_type_percent)
+```
+
+### 6.3 Analyzing Trends by Day of the Week
+# Identifying which days are the most active vs. the most sedentary.
+
+```{r identify_active}
+weekday_analysis <- daily_activity %>%
+  group_by(day_of_week) %>%
+  summarize(
+    avg_steps = mean(total_steps),
+    avg_calories = mean(calories),
+    avg_sedentary_mins = mean(sedentary_minutes)
+  ) %>%
+  arrange(desc(avg_steps))
+
+print(weekday_analysis)
+```
+
+### 6.4 Merging Activity and Sleep Data
+# To see if there is a correlation between physical activity and sleep quality.
+
+# First, align date column names for the merge
+```{r align_date}
+daily_sleep <- daily_sleep %>% 
+  rename(activity_date = sleep_day)
+```
+
+# Perform inner join (only keeping records where both activity and sleep exist)
+```{r merge}
+combined_data <- merge(daily_activity, daily_sleep, by = c("id", "activity_date"))
+```
+
+# Calculate correlation between steps and sleep
+```{r correlation}
+correlation_value <- cor(combined_data$total_steps, combined_data$total_minutes_asleep)
+cat("Correlation between Steps and Sleep:", correlation_value, "\n")
+```
+
+
+# ------------------------------------------------------------------------------
+# 7. KEY FINDINGS (Preliminary Observations)
+# ------------------------------------------------------------------------------
+# 1. Average daily steps are around 7,600, which is below the recommended 10,000.
+# 2. Sedentary minutes average ~991 (over 16 hours!), indicating a high degree of inactivity.
+# 3. Participants sleep an average of 419 minutes (~7 hours).
+# 4. Preliminary check: There is a very weak correlation between steps and sleep 
+#    duration in this specific dataset.
+
+
+# ------------------------------------------------------------------------------
+# 8. SHARE PHASE (Data Visualization)
+# ------------------------------------------------------------------------------
+
+### 8.1 Distribution of User Types
+# This chart helps Bellabeat understand their audience segments.
+# Knowing that a large portion is "Active" but not "Highly Active" 
+# suggests a need for motivational features.
+
+```{r user_type, echo=FALSE}
+ggplot(user_type_percent, aes(x = user_type, y = percentage, fill = user_type)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  geom_text(aes(label = paste0(percentage, "%")), vjust = -0.5, size = 5) +
+  scale_fill_manual(values = c("#FF7F50", "#69b3a2", "#404080")) +
+  labs(title = "User Distribution by Activity Level",
+       subtitle = "Most users are in the 'Active' category (5k-10k steps)",
+       x = "User Type",
+       y = "Percentage (%)",
+       fill = "Type") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.title = element_text(face = "bold", size = 14))
+```
+
+### 8.2 Daily Steps by Day of the Week
+# Identifying when users are most active helps Bellabeat time their 
+# marketing notifications and social media engagement.
+```{r Steps_by_week, echo=FALSE}
+ggplot(weekday_analysis, aes(x = day_of_week, y = avg_steps, fill = avg_steps)) +
+  geom_bar(stat = "identity") +
+  geom_hline(yintercept = 7500, linetype = "dashed", color = "red") +
+  annotate("text", x = 1, y = 7800, label = "Average", color = "red") +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Average Daily Steps by Weekday",
+       subtitle = "Tuesdays and Saturdays are the most active days",
+       x = "",
+       y = "Average Steps") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### 8.3 Relationship: Total Steps vs. Calories
+# This scatter plot confirms the positive correlation between movement 
+# and energy expenditure. This validates the core value of Bellabeat trackers.
+```{r relationship_steps&calories, echo=FALSE}
+ggplot(daily_activity, aes(x = total_steps, y = calories)) +
+  geom_point(alpha = 0.5, color = "darkgreen") +
+  geom_smooth(method = "lm", color = "orange") + # Adding a trend line
+  labs(title = "Total Steps vs. Calories Burned",
+       subtitle = "A clear positive correlation between activity and energy output",
+       x = "Total Steps",
+       y = "Calories Burned") +
+  theme_light()
+```
+
+### 8.4 Sleep Efficiency: Minutes Asleep vs. Time in Bed
+# This chart shows how much time users spend awake in bed. 
+# Bellabeat can use this to market 'Sleep Hygiene' features.
+```{r sleep_efficiency, echo=FALSE}
+ggplot(combined_data, aes(x = total_time_in_bed, y = total_minutes_asleep)) +
+  geom_point(color = "purple", alpha = 0.4) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "gray") +
+  labs(title = "Sleep Duration vs. Time in Bed",
+       subtitle = "Points far below the line indicate poor sleep efficiency",
+       x = "Total Minutes in Bed",
+       y = "Total Minutes Asleep") +
+  theme_minimal()
+```
+
+# ------------------------------------------------------------------------------
+# 9. EXPORTING VISUALS (Optional)
+# ------------------------------------------------------------------------------
+# ggsave("user_distribution.png")
+# ggsave("weekday_steps.png")
+
+
+# ------------------------------------------------------------------------------
+# 10. ACT PHASE (Conclusions & Strategic Recommendations)
+# ------------------------------------------------------------------------------
+
+### 10.1 Summary of Findings
+# 1. Activity Gap: Most users are 'Active' (5k-10k steps) but fall short of the 
+#    10,000-step health benchmark. Sedentary time is alarmingly high (16+ hours).
+# 2. Weekend vs. Weekday: Activity peaks on Saturdays and Tuesdays, with 
+#    significant drops on Sundays and Thursdays.
+# 3. Sleep Efficiency: Users spend a notable amount of time in bed without 
+#    actually sleeping, suggesting room for improvement in sleep hygiene.
+# 4. Burn Correlation: There is a strong, predictable relationship between 
+#    steps and calories, which is a powerful marketing hook.
+
+### 10.2 Strategic Recommendations for Bellabeat Marketing
+
+# Recommendation 1: Personalized Activity Incentives (Focus: Bellabeat App)
+# - Insight: Users are stuck in the "Active" middle ground.
+# - Action: Implement "Level Up" challenges in the Bellabeat app. For users 
+#   averaging 7,000 steps, trigger a notification: "You are only 3,000 steps 
+#   away from the top 20%! A 20-minute walk will get you there."
+
+# Recommendation 2: Combat Sedentary Behavior (Focus: Leaf / Time Watch)
+# - Insight: Sedentary time averages 991 minutes/day.
+# - Action: Market the 'Leaf' tracker and 'Time' watch's vibration alerts 
+#   specifically as "Sedentary Reminders." Use the campaign slogan: 
+#   "Break the Cycle: Your Bellabeat knows when it's time to stretch."
+
+# Recommendation 3: Optimize Sleep Marketing (Focus: Bellabeat Membership)
+# - Insight: Data shows a gap between 'Time in Bed' and 'Time Asleep.'
+# - Action: Use this to promote Bellabeat's subscription membership. Offer 
+#   content like "Guided Sleep Meditations" or "Smart Alarms" that wake users 
+#   during their lightest sleep phase to improve overall sleep quality.
+
+# Recommendation 4: Timing of Marketing Campaigns
+# - Insight: Sunday is the least active day.
+# - Action: Schedule motivational social media content or "Weekly Reset" 
+#   email newsletters on Sunday evenings to prepare users for a healthy week 
+#   ahead, potentially boosting engagement for the following Monday.
+
+### 10.3 Final Conclusion
+# By applying these FitBit trends to Bellabeat’s product ecosystem, we can 
+# transform a simple tracking device into a proactive health coach. This 
+# shifts Bellabeat’s positioning from "data collection" to "habit transformation," 
+# which resonates deeply with the target audience of health-conscious women.
+
+# =============================================================================
+# END OF SCRIPT: Bellabeat Case Study Complete
+# =============================================================================
+
+
+
+
+
+
