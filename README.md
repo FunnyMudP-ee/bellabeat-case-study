@@ -14,5 +14,5 @@ This case study is part of my Data Analytics portfolio. I analyze smart device d
 3.  **Sleep Content**: Promote Bellabeat Membership's meditation and sleep hygiene content.
 
 ## Deliverables
-*   [Full PDF Report](output/Bella-Beat-Case.pdf)
+*   [Full PDF Report](output/Bella%20Beat%20Case%20Analyze.pdf)
 *   [Raw R Script](bellabeat_script.R)
